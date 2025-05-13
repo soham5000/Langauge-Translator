@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Smart Language Translator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>
+            <img src="https://cdn-icons-png.flaticon.com/512/2360/2360965.png" width="40" alt="AI Translator Icon">
+            Smart Language Translator
+        </h1>
+        <form method="POST">
+            <textarea id="text-input" name="text" placeholder="Enter text to translate..." required>{{ request.form.get('text', '') }}</textarea>
+            <div class="controls">
+                <select name="dest_lang" id="language-select">
+                    {% for code, name in languages.items() %}
+                        <option value="{{ code }}" {% if request.form.get('dest_lang') == code %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="translate-btn">Translate</button>
+                <button type="button" onclick="startDictation()" class="mic-btn" id="mic-btn">🎙 Speak</button>
+            </div>
+        </form>
+
+        {% if translation %}
+        <div class="result output-box slide-up">
+            <h3>Detected Language: <span>{{ detected }}</span></h3>
+            <p id="translated-text">{{ translation }}</p>
+            <div class="speak-buttons">
+                <button class="listen-btn" onclick="playAudio()">🔊 Listen</button>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        function startDictation() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+            if (!SpeechRecognition) {
+                alert("Your browser doesn't support Speech Recognition. Please use Chrome or Edge.");
+                return;
+            }
+
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'en-US';
+            recognition.continuous = false;
+            recognition.interimResults = false;
+
+            const micBtn = document.getElementById("mic-btn");
+            micBtn.textContent = "🎤 Listening...";
+            micBtn.disabled = true;
+
+            recognition.onresult = function (event) {
+                const transcript = event.results[0][0].transcript;
+                document.getElementById("text-input").value = transcript;
+            };
+
+            recognition.onerror = function (event) {
+                alert("Speech recognition failed: " + event.error);
+            };
+
+            recognition.onend = function () {
+                micBtn.textContent = "🎙 Speak";
+                micBtn.disabled = false;
+            };
+
+            recognition.start();
+        }
+
+        function playAudio() {
+            const text = document.getElementById("translated-text").innerText;
+            const language = document.getElementById("language-select").value;
+
+            fetch("/speak", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: text=${encodeURIComponent(text)}&language=${language}
+            })
+            .then(response => response.json())
+            .then(data => {
+                const audio = new Audio(/${data.audio_path});
+                audio.play();
+            })
+            .catch(error => console.error("Audio playback error:", error));
+        }
+    </script>
+</body>
+</html>
+
+
+translator .htm

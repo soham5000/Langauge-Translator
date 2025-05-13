@@ -1,0 +1,178 @@
+from flask import Flask, render_template, request, jsonify
+from googletrans import Translator, LANGUAGES
+from gtts import gTTS
+import os
+from datetime import datetime
+
+app = Flask(_name_)
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    translation = ""
+    detected_lang = ""
+    if request.method == "POST":
+        text = request.form["text"]
+        dest_lang = request.form["dest_lang"]
+        translator = Translator()
+        result = translator.translate(text, dest=dest_lang)
+        translation = result.text
+        detected_lang = LANGUAGES.get(result.src, 'unknown').capitalize()
+
+    return render_template("translator.html", translation=translation, detected=detected_lang, languages=LANGUAGES)
+
+@app.route("/speak", methods=["POST"])
+def speak():
+    text = request.form["text"]
+    language = request.form["language"]
+    filename = f"audio.mp3"
+    filepath = os.path.join("static", filename)
+
+    tts = gTTS(text=text, lang=language)
+    tts.save(filepath)
+
+    return jsonify({"audio_path": filepath})
+
+if _name_ == "_main_":
+    app.run(debug=True)
+
+
+app .py
+ body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(to right, #d1f4c1, #f8d8c7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+}
+
+.container {
+    background-color: #ffffff;
+    border-radius: 20px;
+    padding: 30px;
+    width: 90%;
+    max-width: 520px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    animation: fadeIn 1s ease;
+}
+
+h1 {
+    margin-bottom: 20px;
+    color: #1f2937;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 1.6rem;
+}
+
+textarea {
+    width: 100%;
+    height: 100px;
+    padding: 15px;
+    font-size: 16px;
+    border-radius: 12px;
+    border: 1px solid #ccc;
+    resize: none;
+    margin-bottom: 15px;
+    transition: box-shadow 0.3s;
+}
+
+textarea:focus {
+    outline: none;
+    box-shadow: 0 0 8px #3cc4c4;
+}
+
+.controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+select {
+    padding: 10px;
+    border-radius: 10px;
+    background-color: #f0f9ff;
+    border: 1px solid #ccc;
+    font-size: 16px;
+}
+
+button {
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: transform 0.2s, background-color 0.3s;
+}
+
+.translate-btn {
+    background-color: #10b981;
+    color: white;
+}
+
+.translate-btn:hover {
+    background-color: #059669;
+    transform: scale(1.03);
+}
+
+.listen-btn {
+    background-color: #3b82f6;
+    color: white;
+    margin-top: 10px;
+}
+
+.listen-btn:hover {
+    background-color: #2563eb;
+    transform: scale(1.03);
+}
+
+.mic-btn {
+    background-color: #f87171;
+    color: white;
+}
+
+.mic-btn:hover {
+    background-color: #ef4444;
+    transform: scale(1.05);
+}
+
+.output-box {
+    margin-top: 25px;
+    background-color: #f8fbfe;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.result h3 {
+    color: #111827;
+    margin-bottom: 10px;
+}
+
+.result p {
+    font-size: 18px;
+    font-weight: 500;
+    color: #374151;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+ 
