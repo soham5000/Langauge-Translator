@@ -1,0 +1,329 @@
+from flask import Flask, render_template, request
+from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing import image
+import numpy as np
+import os
+
+app = Flask(name)
+
+# Load the trained model
+MODEL_PATH = 'model/skin_disease_mobilenetv2.h5'
+model = load_model(MODEL_PATH)
+
+# Updated class labels with 23 skin disease categories.
+# Ensure this order exactly matches the training order of your model.
+class_names = [
+    "Acne and Rosacea",                                  # 1
+    "Actinic Keratosis & Basal Cell Carcinomas",         # 2
+    "Atopic Dermatitis",                                 # 3
+    "Bullous Diseases",                                  # 4
+    "Cellulitis, Impetigo & Bacterial Infections",       # 5
+    "Eczema",                                            # 6
+    "Fungal Infections",                                 # 7
+    "Herpes, HPV & other STDs",                          # 8
+    "Pigmentary Disorders",                              # 9 (Light Diseases & Disorders of Pigment)
+    "Nail Infections & Disorders",                       # 10 (Nail Fungus and other Nail Disease)
+    "Contact Dermatitis",                                # 11 (Poison Ivy photos & other Contact Derm)
+    "Psoriasis & Lichen Planus",                         # 12 (Psoriasis pictures, Lichen Planus and Related)
+    "Infestations",                                    # 13 (Scabies, Lyme Disease & other Infestations)
+    "Tinea (Ringworm)",                                  # 14 (Tinea Ringworm)
+    "Urticaria (Hives)",                                 # 15
+    "Vascular Tumors",                                   # 16
+    "Vasculitis",                                        # 17 (Vasculitis Photos)
+    "Viral Infections",                                  # 18 (Warts, Molluscum & other Viral Infections)
+    "Melanoma",                                          # 19 - Additional category
+    "Dermatofibroma",                                    # 20 - Additional category
+    "Seborrheic Keratosis",                              # 21 - Additional category
+    "Melasma",                                           # 22 - Additional category
+    "Keloids"                                            # 23 - Additional category
+]
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/predict', methods=['POST'])
+def predict():
+    if 'image' not in request.files:
+        return "No image uploaded"
+
+    file = request.files['image']
+    if file.filename == '':
+        return "No selected file"
+
+    if file:
+        # Save the uploaded file
+        file_path = os.path.join('static', file.filename)
+        file.save(file_path)
+
+        # Preprocess the image
+        img = image.load_img(file_path, target_size=(160, 160))
+        img_array = image.img_to_array(img)
+        img_array = np.expand_dims(img_array, axis=0)
+        img_array = img_array / 255.0
+
+        # Predict
+        prediction = model.predict(img_array)
+        print("Prediction shape:", prediction.shape)
+        print("Prediction values:", prediction)
+
+        # Get the highest confidence prediction
+        class_index = np.argmax(prediction[0])
+        disease_name = class_names[class_index]
+        confidence = np.max(prediction[0]) * 100
+
+        return render_template('result.html',
+                               image_path=file_path,
+                               prediction=disease_name,
+                               confidence=round(confidence, 2))
+
+if name == 'main':
+    app.run(debug=True)  
+
+import os
+import tensorflow as tf
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, Dropout, GlobalAveragePooling2D
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
+from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
+from PIL import ImageFile
+
+# Fix: Allow loading of truncated images
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+# Dataset paths
+train_dir = "Penyakit Kulit/train"
+val_dir = "Penyakit Kulit/validation"
+test_dir = "Penyakit Kulit/test"
+
+# Constants
+img_size = (160, 160)  # Optimized for MobileNetV2
+batch_size = 32
+num_classes = len(os.listdir(train_dir))
+
+# Data augmentation
+train_datagen = ImageDataGenerator(
+    preprocessing_function=preprocess_input,
+    rotation_range=20,
+    zoom_range=0.2,
+    horizontal_flip=True
+)
+
+val_test_datagen = ImageDataGenerator(preprocessing_function=preprocess_input)
+
+train_generator = train_datagen.flow_from_directory(
+    train_dir, target_size=img_size, batch_size=batch_size, class_mode='categorical'
+)
+val_generator = val_test_datagen.flow_from_directory(
+    val_dir, target_size=img_size, batch_size=batch_size, class_mode='categorical'
+)
+test_generator = val_test_datagen.flow_from_directory(
+    test_dir, target_size=img_size, batch_size=batch_size, class_mode='categorical'
+)
+
+# Load pre-trained MobileNetV2 base (without top layers)
+base_model = MobileNetV2(input_shape=(160, 160, 3), include_top=False, weights='imagenet')
+base_model.trainable = False  # Freeze base model for fast training
+
+# Add custom classifier layers
+x = base_model.output
+x = GlobalAveragePooling2D()(x)
+x = Dropout(0.3)(x)
+predictions = Dense(num_classes, activation='softmax')(x)
+
+model = Model(inputs=base_model.input, outputs=predictions)
+
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['categorical_accuracy'])
+
+# Callbacks
+if not os.path.exists("model"):
+    os.makedirs("model")
+
+checkpoint = ModelCheckpoint("model/skin_disease_mobilenetv2.h5", monitor='val_categorical_accuracy', save_best_only=True)
+early_stop = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
+lr_reduce = ReduceLROnPlateau(monitor='val_loss', patience=2, factor=0.5, verbose=1)
+
+# Train
+model.fit(
+    train_generator,
+    validation_data=val_generator,
+    epochs=10,
+    callbacks=[checkpoint, early_stop, lr_reduce]
+)
+
+# Evaluate
+loss, accuracy = model.evaluate(test_generator)
+print(f"\n✅ Boosted Test Accuracy: {accuracy:.2f}")   (Training code)
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Skin Disease Classifier</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: url('{{ url_for("static", filename="images/skin-bg.jpg") }}') no-repeat center center fixed;
+            background-size: cover;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 class="fade-in">Upload a Skin Image</h2>
+        <form action="/predict" method="post" enctype="multipart/form-data" class="fade-in">
+            <input type="file" name="image" required>
+            <br><br>
+            <input type="submit" value="Predict" class="btn">
+        </form>
+    </div>
+</body>
+</html>  (index file )
+
+/* General styling with background */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    color: #333;
+    background-image: url('../static/images/skin-bg.jpg'); /* Adjust the path if needed */
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    filter: brightness(1.1); /* makes background slightly brighter */
+}
+
+/* Container styling */
+.container {
+    background: rgba(255, 255, 255, 0.85); /* semi-transparent white */
+    backdrop-filter: blur(8px); /* adds blur effect to background behind container */
+    -webkit-backdrop-filter: blur(8px); /* Safari support */
+    border-radius: 15px;
+    width: 90%;
+    max-width: 450px;
+    padding: 40px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+    text-align: center;
+    animation: popin 0.6s ease-out;
+}
+
+/* Image styling */
+.result-img {
+    max-width: 100%;
+    border-radius: 10px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+
+/* Headings and text */
+h2 {
+    margin-bottom: 20px;
+    font-size: 1.8em;
+}
+
+.result-text {
+    font-size: 1.2em;
+    margin: 10px 0;
+}
+
+/* Button styles */
+.btn {
+    display: inline-block;
+    background: #5563DE;
+    color: #fff;
+    padding: 10px 25px;
+    border-radius: 25px;
+    text-decoration: none;
+    font-size: 1em;
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.btn:hover {
+    background: #3b4db7;
+    transform: translateY(-3px);
+}
+
+/* Fade-in animation */
+.fade-in {
+    animation: fadeInAnimation 1s ease-in forwards;
+    opacity: 0;
+}
+
+@keyframes fadeInAnimation {
+    to {
+        opacity: 1;
+    }
+}
+
+/* Pop-in animation for container */
+@keyframes popin {
+    0% {
+        transform: scale(0.7);
+        opacity: 0;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* File input customization */
+input[type="file"] {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    margin-top: 15px;
+}
+
+/* Form element spacing */
+form {
+    margin-top: 20px;
+}   (style css )
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Prediction Result</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(rgba(116, 171, 226, 0.5), rgba(85, 99, 222, 0.5)),
+                        url('{{ url_for("static", filename="images/skin-bg.jpg") }}') no-repeat center center fixed;
+            background-size: cover;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container fade-in">
+        <h2>Prediction Result</h2>
+        <img src="{{ image_path }}" alt="Uploaded Image" class="result-img">
+        <br><br>
+        <p class="result-text"><strong>Disease:</strong> {{ prediction }}</p>
+        <p class="result-text"><strong>Confidence:</strong> {{ confidence }}%</p>
+        <a href="/" class="btn">Try Another</a>
+    </div>
+</body>
+</html>
